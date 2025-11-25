@@ -78,7 +78,9 @@ def metadata_root(path: str, *, name: str = DEFAULT_NAME) -> str:
     raise ValueError(f"Could not find '{name}' in {path}.")
 
 
-def load_metadata(path: str, *, supporting_arrays: bool = False, name: str = DEFAULT_NAME) -> dict:
+def load_metadata(
+    path: str, *, supporting_arrays: bool = False, name: str = DEFAULT_NAME
+) -> dict:
     """Load metadata from a checkpoint file.
 
     Parameters
@@ -114,7 +116,9 @@ def load_metadata(path: str, *, supporting_arrays: bool = False, name: str = DEF
         with zipfile.ZipFile(path, "r") as f:
             metadata = json.load(f.open(metadata, "r"))
             if supporting_arrays:
-                arrays = load_supporting_arrays(f, metadata.get("supporting_arrays_paths", {}))
+                arrays = load_supporting_arrays(
+                    f, metadata.get("supporting_arrays_paths", {})
+                )
                 return metadata, arrays
 
             return metadata
@@ -148,14 +152,15 @@ def load_supporting_arrays(zipf: zipfile.ZipFile, entries: dict) -> dict:
     return supporting_arrays
 
 
-def _get_supporting_arrays_paths(directory: str, folder: str, supporting_arrays: dict | np.ndarray) -> dict:
+def _get_supporting_arrays_paths(
+    directory: str, folder: str, supporting_arrays: dict | np.ndarray
+) -> dict:
     """Get the paths of supporting arrays."""
-    if supporting_arrays is None:
-        return {}
-
     if isinstance(supporting_arrays, dict):
         return {
-            new_key: _get_supporting_arrays_paths(f"{directory}/{folder}", new_key, new_value)
+            new_key: _get_supporting_arrays_paths(
+                f"{directory}/{folder}", new_key, new_value
+            )
             for new_key, new_value in supporting_arrays.items()
         }
 
@@ -166,7 +171,9 @@ def _get_supporting_arrays_paths(directory: str, folder: str, supporting_arrays:
     )
 
 
-def _write_array_to_bytes(array: dict | np.ndarray, name: str, entry: dict, zipf: zipfile.ZipFile) -> None:
+def _write_array_to_bytes(
+    array: dict | np.ndarray, name: str, entry: dict, zipf: zipfile.ZipFile
+) -> None:
     """Write a supporting array to bytes in a zip file."""
     if isinstance(array, dict):
         for sub_name, sub_array in array.items():
@@ -184,7 +191,12 @@ def _write_array_to_bytes(array: dict | np.ndarray, name: str, entry: dict, zipf
 
 
 def save_metadata(
-    path: str, metadata: dict, *, supporting_arrays: dict = None, name: str = DEFAULT_NAME, folder: str = DEFAULT_FOLDER
+    path: str,
+    metadata: dict,
+    *,
+    supporting_arrays: dict = None,
+    name: str = DEFAULT_NAME,
+    folder: str = DEFAULT_FOLDER,
 ) -> None:
     """Save metadata to a checkpoint file.
 
@@ -202,7 +214,6 @@ def save_metadata(
         The folder where the metadata file will be saved
     """
     with zipfile.ZipFile(path, "a") as zipf:
-
         directories = set()
 
         for b in zipf.namelist():
@@ -217,7 +228,9 @@ def save_metadata(
         if len(directories) != 1:
             # PyTorch checkpoints should have a single directory
             # otherwise PyTorch will complain
-            raise ValueError(f"No or multiple directories in the checkpoint {path}, directories={directories}")
+            raise ValueError(
+                f"No or multiple directories in the checkpoint {path}, directories={directories}"
+            )
 
         directory = list(directories)[0]
 
@@ -225,17 +238,24 @@ def save_metadata(
         LOG.info("Saving metadata to %s/%s/%s", directory, folder, name)
 
         metadata = metadata.copy()
-        metadata["supporting_arrays_paths"] = _get_supporting_arrays_paths(directory, folder, supporting_arrays)
+
+        if supporting_arrays is not None:
+            metadata["supporting_arrays_paths"] = _get_supporting_arrays_paths(
+                directory, folder, supporting_arrays
+            )
+            _write_array_to_bytes(
+                supporting_arrays, "", metadata["supporting_arrays_paths"], zipf
+            )
 
         zipf.writestr(
             f"{directory}/{folder}/{name}",
             json.dumps(metadata),
         )
 
-        _write_array_to_bytes(supporting_arrays, "", metadata["supporting_arrays_paths"], zipf)
 
-
-def _edit_metadata(path: str, name: str, callback: Callable, supporting_arrays: dict | None = None) -> None:
+def _edit_metadata(
+    path: str, name: str, callback: Callable, supporting_arrays: dict | None = None
+) -> None:
     """Edit metadata in a checkpoint file.
 
     Parameters
@@ -273,7 +293,6 @@ def _edit_metadata(path: str, name: str, callback: Callable, supporting_arrays: 
 
         with zipfile.ZipFile(new_path, "w", zipfile.ZIP_STORED) as new_zip:
             with tqdm.tqdm(total=total_files, desc="Rebuilding checkpoint") as pbar:
-
                 # Copy all files except the target file
                 for file_path in file_list:
                     if file_path != target_file:
@@ -299,7 +318,11 @@ def _edit_metadata(path: str, name: str, callback: Callable, supporting_arrays: 
                 # Add supporting arrays if provided
                 if supporting_arrays is not None:
                     for key, entry in supporting_arrays.items():
-                        array_path = os.path.join(directory, f"{key}.numpy") if directory else f"{key}.numpy"
+                        array_path = (
+                            os.path.join(directory, f"{key}.numpy")
+                            if directory
+                            else f"{key}.numpy"
+                        )
                         new_zip.writestr(array_path, entry.tobytes())
                         pbar.update(1)
 
@@ -307,7 +330,13 @@ def _edit_metadata(path: str, name: str, callback: Callable, supporting_arrays: 
     LOG.info("Updated metadata in %s", path)
 
 
-def replace_metadata(path: str, metadata: dict, supporting_arrays: dict = None, *, name: str = DEFAULT_NAME) -> None:
+def replace_metadata(
+    path: str,
+    metadata: dict,
+    supporting_arrays: dict = None,
+    *,
+    name: str = DEFAULT_NAME,
+) -> None:
     """Replace metadata in a checkpoint file.
 
     Parameters
